@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { StandardCheckoutClient, Env } from 'pg-sdk-node';
-import { db } from "@lib/firebaseAdmin";
+import admin, { db } from "@lib/firebaseAdmin";
+import { messaging } from "firebase-admin"
 
 export async function POST(request: NextRequest) {
     try {
@@ -13,7 +14,6 @@ export async function POST(request: NextRequest) {
         );
 
         const resp = await client.getOrderStatus(merchantOrderId);
-        console.log("resp", resp);
 
         // Update all orders with this merchantOrderId
         const ordersSnapshot = await db.collection('orders')
@@ -22,14 +22,54 @@ export async function POST(request: NextRequest) {
 
         const updatePromises = ordersSnapshot.docs.map(doc => 
             doc.ref.update({
-                state: resp.state,
+                paymentState: resp.state,
                 updatedAt: new Date()
             })
         );
 
         await Promise.all(updatePromises);
+
+        try {
+            // Get unique restaurant IDs from orders
+            const restaurantIds = [...new Set(ordersSnapshot.docs.map(doc => doc.data().restaurantId).filter(Boolean))];
+            
+            // Get FCM tokens for each restaurant
+            const fcmTokens: string[] = [];
+            for (const restaurantId of restaurantIds) {
+                const restaurantDoc = await db.collection('restaurants').doc(restaurantId).get();
+                const restaurantData = restaurantDoc.data();
+                if (restaurantData?.fcmToken) {
+                    fcmTokens.push(restaurantData.fcmToken);
+                }
+            }
+
+            if (fcmTokens.length > 0) {
+                const message: messaging.MulticastMessage = {
+                    tokens: fcmTokens,
+                    notification: {
+                        title: "New Order Received",
+                        body: `You have received a new order.`,
+                    },
+                    data: {
+                        merchantOrderId,
+                        paymentState: resp.state,
+                        type: 'NEW_ORDER',
+                        timestamp: new Date().toISOString()
+                    },
+                };
+
+                const response = await admin.messaging().sendEachForMulticast(message);
+                if (response.failureCount > 0) {
+                    console.error('Failed to send some messages:', response.responses);
+                }
+            }
+
+            return NextResponse.json({ state: "SUCCESS" });
+        } catch (error) {
+            console.error('Error sending notifications:', error);
+            return NextResponse.json({ state: "SUCCESS" });
+        }
         
-        return NextResponse.json(resp);
     } catch (error) {
         console.error("Error: ", error);
         return NextResponse.json(

@@ -24,12 +24,11 @@ export async function POST(request: NextRequest) {
         const { userId, orderItems } = await request.json() as { userId: string, orderItems: OrderItems[] };
         let total = 0;
         const access_token = await getAccessToken();
-        console.log(access_token)
         const merchantOrderId = randomUUID();
         
         const orderRefs: DocumentReference[] = [];
         for (let i = 0; i < orderItems.length; i++) {
-            let price = 0;
+            let itemTotal = 0;
             for (const item of orderItems[i].items) {
                 const dishInfo = await getPriceNAvailabilityOfDish(item.id);
                 if (!dishInfo.isAvailable) {
@@ -41,9 +40,9 @@ export async function POST(request: NextRequest) {
                         { status: 400 }
                     );
                 }
-                price += dishInfo.price * item.qty;
+                itemTotal += dishInfo.price * item.qty;
             }
-            total += price + orderItems[i].delivery + orderItems[i].gst + 10;
+            total += itemTotal + orderItems[i].delivery + orderItems[i].gst + 10;
             const orderCollection = db.collection("orders");
             const orderRef = orderCollection.doc();
             orderRefs.push(orderRef);
@@ -57,22 +56,29 @@ export async function POST(request: NextRequest) {
                 'paymentFlow': {
                   'type': 'PG_CHECKOUT'
                 }
-              }), {
+            }), {
                 headers:{
                 'Content-Type': 'application/json',
                 'Authorization': `O-Bearer ${access_token}`
-              }});
-
-              console.log(ppRes)
+            }});
 
             for (let orderRefIndex = 0; orderRefIndex < orderItems.length; orderRefIndex++) {
+                let itemTotal = 0;
+                for (const item of orderItems[orderRefIndex].items) {
+                    const dishInfo = await getPriceNAvailabilityOfDish(item.id);
+                    itemTotal += dishInfo.price * item.qty;
+                }
+                
                 const orderData = {
                     userId: userId,
                     restaurantId: orderItems[orderRefIndex].restaurantId || null,
                     merchantOrderId,
                     items: orderItems[orderRefIndex].items,
+                    itemTotal,
+                    status: "PENDING",
                     transactionId: ppRes.data.orderId,
-                    state: ppRes.data.state,
+                    paymentMode: "ONLINE",
+                    paymentState: ppRes.data.state,
                     expireAt: new Date(ppRes.data.expireAt),
                     delivery: orderItems[orderRefIndex].delivery,
                     gst: orderItems[orderRefIndex].gst,
