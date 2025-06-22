@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import admin, { db } from '@/app/lib/firebaseAdmin';
+import initiatePhonePeRefund from '@/app/lib/initiatePhonePeRefund';
+import { RefundResponse } from 'pg-sdk-node';
 
 export async function POST(request: NextRequest) {
     try {
@@ -35,17 +37,39 @@ export async function POST(request: NextRequest) {
         }
 
         // Check if order is already rejected or in a final state
-        if (orderData?.status !== 'PENDING') {
+        if (orderData?.status !== 'PLACED') {
             return NextResponse.json(
                 { error: 'Order is not in pending state' },
                 { status: 400 }
             );
         }
 
-        // Update order status
+        // If payment mode was ONLINE, initiate PhonePe refund
+        let refundResult: (RefundResponse & { merchantRefundId: string }) | null = null;
+        if (orderData?.paymentMode === 'ONLINE') {
+            try {
+                refundResult = await initiatePhonePeRefund(orderData);
+            } catch (refundError) {
+                console.error('Error initiating PhonePe refund:', refundError);
+                return NextResponse.json(
+                    { error: 'Failed to initiate refund. Please try again later.' },
+                    { status: 500 }
+                );
+            }
+        }
+
+        // Update order status and refund info if applicable
         await orderRef.update({
-            status: 'REJECTED',
-            updatedAt: new Date()
+            status: 'CANCELLED',
+            cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: new Date(),
+            ...(refundResult
+                ? {
+                    paymentState: refundResult.state === "PENDING" ? 'REFUND_INITIATED' : 'FAILED',
+                    refundId: refundResult.refundId,
+                    merchantRefundId: refundResult.merchantRefundId
+                }
+                : {})
         });
 
         // Get user's FCM token
@@ -66,6 +90,15 @@ export async function POST(request: NextRequest) {
                     type: 'ORDER_STATUS_UPDATE',
                     timestamp: new Date().toISOString()
                 },
+                android: {
+                    notification: {
+                        channelId: "default",
+                        sound: "notification_sound",
+                        icon: "notification_icon",
+                        priority: "high",
+                        color: "#FFB627"
+                    }
+                }
             };
 
             try {
@@ -75,7 +108,10 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        return NextResponse.json({ state: 'SUCCESS' });
+        return NextResponse.json({
+            state: 'SUCCESS',
+            ...(refundResult ? { refund: refundResult } : {})
+        });
 
     } catch (error) {
         console.error('Error rejecting order:', error);

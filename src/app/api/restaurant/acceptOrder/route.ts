@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import admin, { db } from '@/app/lib/firebaseAdmin';
+import { getRiderByPINCode } from '@/app/lib/getRiderByPINCode';
 
 export async function POST(request: NextRequest) {
     try {
@@ -35,7 +36,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Check if order is already accepted
-        if (orderData?.status !== 'PENDING') {
+        if (orderData?.status !== 'PLACED') {
             return NextResponse.json(
                 { error: 'Order is not in pending state' },
                 { status: 400 }
@@ -72,6 +73,55 @@ export async function POST(request: NextRequest) {
                 await admin.messaging().send(message);
             } catch (error) {
                 console.error('Error sending notification:', error);
+            }
+        }
+
+        // Get restaurant and user PIN codes
+        const restaurantDoc = await db.collection('restaurants').doc(restaurantId).get();
+        const restaurantData = restaurantDoc.data();
+        const userPINCode = userData?.addresses[0]?.pinCode;
+        const restaurantPINCode = restaurantData?.address?.pinCode;
+
+        console.log(userPINCode, restaurantPINCode)
+
+        if (userPINCode && restaurantPINCode) {
+            // Get available riders for the route
+            const availableRiders = await getRiderByPINCode(restaurantPINCode, userPINCode);
+
+            if (availableRiders && availableRiders.length > 0) {
+                // Update assigned orders array for all available riders
+                const updatePromises = availableRiders.map(async (riderDoc) => {
+                    const riderRef = db.collection('riders').doc(riderDoc.id);
+                    await riderRef.update({
+                        availableOrders: admin.firestore.FieldValue.arrayUnion(orderId)
+                    });
+
+                    // Send notification to rider if FCM token exists
+                    const riderData = riderDoc.data();
+                    if (riderData?.fcmToken) {
+                        const riderMessage: admin.messaging.Message = {
+                            token: riderData.fcmToken,
+                            notification: {
+                                title: 'New Order Available',
+                                body: 'A new order is available for pickup and delivery.',
+                            },
+                            data: {
+                                orderId,
+                                status: 'ACCEPTED',
+                                type: 'NEW_ORDER_AVAILABLE',
+                                timestamp: new Date().toISOString()
+                            },
+                        };
+
+                        try {
+                            await admin.messaging().send(riderMessage);
+                        } catch (error) {
+                            console.error('Error sending notification to rider:', error);
+                        }
+                    }
+                });
+
+                await Promise.all(updatePromises);
             }
         }
 

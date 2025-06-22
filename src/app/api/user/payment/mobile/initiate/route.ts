@@ -21,7 +21,7 @@ interface OrderItems {
 
 export async function POST(request: NextRequest) {
     try {
-        const { userId, orderItems } = await request.json() as { userId: string, orderItems: OrderItems[] };
+        const { userId, orderItems, address } = await request.json() as { userId: string, orderItems: OrderItems[], address: object };
         let total = 0;
         const access_token = await getAccessToken();
         const merchantOrderId = randomUUID();
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
                     merchantOrderId,
                     items: orderItems[orderRefIndex].items,
                     itemTotal,
-                    status: "PENDING",
+                    status: "PLACED",
                     transactionId: ppRes.data.orderId,
                     paymentMode: "ONLINE",
                     paymentState: ppRes.data.state,
@@ -83,6 +83,7 @@ export async function POST(request: NextRequest) {
                     delivery: orderItems[orderRefIndex].delivery,
                     gst: orderItems[orderRefIndex].gst,
                     total: orderItems[orderRefIndex].total,
+                    address,
                     createdAt: new Date(),
                     updatedAt: new Date()
                 };

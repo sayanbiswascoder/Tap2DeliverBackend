@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import admin from '../../lib/firebaseAdmin';
-import { messaging } from 'firebase-admin';
 
 export async function POST(request: NextRequest) {
     console.log("POST")
@@ -33,15 +32,25 @@ export async function POST(request: NextRequest) {
     //   );
     // }
 
-    const message: messaging.MulticastMessage = {
-      tokens: ["f6hunzPxRC2BOe6Jd1-D4t:APA91bERS35989X6qi6nDvKNzFKRYDS3N_3g7o46inY7ia9VitLly-fPGzkgh6o9j0yQ2nbt1YU8MoyPJv0YNglC_Wi8XnP5nUbb0FSlPon7FiN311nzZ8Q"],
+    const message: admin.messaging.MulticastMessage = {
+      tokens: ["fx1OGEMURASjQTdjfShqIy:APA91bFMtprshCv5A5uX_REhd01C4XmMPrJOvzAV2lLVrQTg9MleonhpWYToRu2009TystyD9LC5hy_DlLs_9px9xQhV9fX85b5XgR__cNjIe143b6aAdX4"],
       notification: {
-        title: "title",
-        body: JSON.stringify({
-            message: "Test Message"
-        }),
+          title: "New Order Received",
+          body: `You have received a new order.`,
       },
-      data: {},
+      android: {
+          notification: {
+              channelId: "default",     // must match your Expo-defined channel
+              sound: "notification_sound", // the sound file without path
+              icon: "notification_icon", // use the app's icon
+              priority: "high",
+              color: "#FFB627"
+          }
+      },
+      data: {
+          type: 'NEW_ORDER',
+          timestamp: new Date().toISOString()
+      },
     };
 
     const response = await admin.messaging().sendEachForMulticast(message);

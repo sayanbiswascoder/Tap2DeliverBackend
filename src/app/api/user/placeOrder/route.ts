@@ -19,7 +19,7 @@ interface OrderItems {
 
 export async function POST(request: NextRequest) {
   try {
-    const { userId, orderItems } = await request.json() as { userId: string, orderItems: OrderItems[] };
+    const { userId, orderItems, address } = await request.json() as { userId: string, orderItems: OrderItems[], address: object };
     
     // Validate request body
     if (!userId || !orderItems) {
@@ -68,12 +68,13 @@ export async function POST(request: NextRequest) {
                 restaurantId: orderItems[orderRefIndex].restaurantId || null,
                 items: orderItems[orderRefIndex].items,
                 itemTotal,
-                status: "PENDING",
+                status: "PLACED",
                 paymentMode: "COD",
-                paymentState: "PENDING",
+                paymentState: "PLACED",
                 delivery: orderItems[orderRefIndex].delivery,
                 gst: orderItems[orderRefIndex].gst,
                 total: orderItems[orderRefIndex].total,
+                address,
                 createdAt: new Date(),
                 updatedAt: new Date()
             };
@@ -97,6 +98,12 @@ export async function POST(request: NextRequest) {
                     notification: {
                         title: "New Order Received",
                         body: `You have received a new order.`,
+                    },
+                    "android": {
+                        "notification": {
+                            "channelId": "order",     // must match your Expo-defined channel
+                            "sound": "custom_sound.wav" // the sound file without path
+                        }
                     },
                     data: {
                         type: 'NEW_ORDER',
