@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
         let refundResult: (RefundResponse & { merchantRefundId: string }) | null = null;
         if (orderData?.paymentMode === 'ONLINE') {
             try {
-                refundResult = await initiatePhonePeRefund(orderData);
+                refundResult = await initiatePhonePeRefund(orderData as any);
             } catch (refundError) {
                 console.error('Error initiating PhonePe refund:', refundError);
                 return NextResponse.json(
