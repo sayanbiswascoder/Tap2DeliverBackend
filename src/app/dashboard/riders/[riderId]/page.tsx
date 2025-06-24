@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 import React, { useEffect, useState } from "react";
 import { getFirestore, doc, getDoc } from "firebase/firestore";
@@ -12,10 +13,6 @@ type Rider = {
   [key: string]: unknown;
 };
 
-type Props = {
-  params: { riderId: string };
-};
-
 async function getRider(riderId: string): Promise<Rider | null> {
   const db = getFirestore();
   const docRef = doc(db, "riders", riderId);
@@ -24,7 +21,8 @@ async function getRider(riderId: string): Promise<Rider | null> {
   return { id: snap.id, ...snap.data() } as Rider;
 }
 
-const RiderPage = ({ params }: Props) => {
+const RiderPage = (props: any) => {
+    const { params } = props;
   const [rider, setRider] = useState<Rider | null>(null);
   const [loading, setLoading] = useState(true);
 

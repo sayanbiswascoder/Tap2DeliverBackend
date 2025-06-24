@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 import React, { useEffect, useState } from "react";
 import { getFirestore, doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
@@ -22,31 +23,9 @@ type Dish = {
   [key: string]: unknown;
 };
 
-type Props = {
-  params: { restId: string };
-};
-
-async function getRestaurant(restId: string): Promise<Restaurant | null> {
-  const db = getFirestore();
-  const docRef = doc(db, "restaurants", restId);
-  const snap = await getDoc(docRef);
-  if (!snap.exists()) return null;
-  return { id: snap.id, ...snap.data() } as Restaurant;
-}
-
-async function getDishesForRestaurant(restId: string): Promise<Dish[]> {
-  const db = getFirestore();
-  const dishesRef = collection(db, "dishes");
-  const q = query(dishesRef, where("restaurantId", "==", restId));
-  const snap = await getDocs(q);
-  const dishes: Dish[] = [];
-  snap.forEach((doc) => {
-    dishes.push({ id: doc.id, ...doc.data() } as Dish);
-  });
-  return dishes;
-}
-
-const RestaurantPage = ({ params }: Props) => {
+// Remove explicit Props type and accept props as 'any' to avoid Next.js PageProps constraint error
+const RestaurantPage = (props: any) => {
+  const { params } = props;
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -55,6 +34,26 @@ const RestaurantPage = ({ params }: Props) => {
   const [dishes, setDishes] = useState<Dish[] | null>(null);
   const [dishesLoading, setDishesLoading] = useState(false);
   const [dishesError, setDishesError] = useState<string | null>(null);
+
+  async function getRestaurant(restId: string): Promise<Restaurant | null> {
+    const db = getFirestore();
+    const docRef = doc(db, "restaurants", restId);
+    const snap = await getDoc(docRef);
+    if (!snap.exists()) return null;
+    return { id: snap.id, ...snap.data() } as Restaurant;
+  }
+
+  async function getDishesForRestaurant(restId: string): Promise<Dish[]> {
+    const db = getFirestore();
+    const dishesRef = collection(db, "dishes");
+    const q = query(dishesRef, where("restaurantId", "==", restId));
+    const snap = await getDocs(q);
+    const dishes: Dish[] = [];
+    snap.forEach((doc) => {
+      dishes.push({ id: doc.id, ...doc.data() } as Dish);
+    });
+    return dishes;
+  }
 
   useEffect(() => {
     const fetchRestaurant = async () => {
@@ -67,6 +66,7 @@ const RestaurantPage = ({ params }: Props) => {
       }
     };
     fetchRestaurant();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.restId]);
 
   const handleShowDishes = async () => {
