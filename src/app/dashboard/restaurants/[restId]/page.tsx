@@ -97,7 +97,7 @@ const RestaurantPage = ({ params }: Props) => {
   }
 
   // Categorize dishes by their category
-  let categorizedDishes: Record<string, Dish[]> = {};
+  const categorizedDishes: Record<string, Dish[]> = {};
   if (dishes && Array.isArray(restaurant.categories)) {
     // For each category, collect dishes
     restaurant.categories.forEach((cat) => {

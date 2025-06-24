@@ -6,7 +6,11 @@ import Link from "next/link";
 interface Restaurant {
   id: string;
   name: string;
-  address: unknown;
+  address: {
+    address: string,
+    pinCode: number,
+    location: Record<string, string>
+  };
   cuisine: string;
   [key: string]: unknown;
 }
