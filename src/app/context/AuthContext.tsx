@@ -25,7 +25,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
     const unsubscribe = onAuthStateChanged(auth, async(currentUser) => {
       setUser(currentUser);
       const idToken = await currentUser?.getIdToken(); // Get the ID token
-      Cookies.set("firebase_id_token", idToken, { expires: 1, secure: true }); // Store for 1 day, secure in production
+      Cookies.set("firebase_id_token", idToken || "", { expires: 1, secure: true }); // Store for 1 day, secure in production
       setLoading(false);
     });
 
