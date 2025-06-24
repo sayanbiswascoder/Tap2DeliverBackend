@@ -9,7 +9,7 @@ interface Restaurant {
   address: {
     address: string,
     pinCode: number,
-    location: Record<string, string>
+    location: Record<string, number>
   };
   cuisine: string;
   [key: string]: unknown;
