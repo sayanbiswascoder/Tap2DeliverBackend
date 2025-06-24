@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client"
 import React, { useEffect, useState } from "react";
 import { app } from "@/app/lib/firebase";
@@ -9,6 +10,7 @@ import Loading from "../../loading";
 type Order = {
   id: string;
   createdAt?: { toDate?: () => Date };
+  [key: string]: any;
 };
 
 type Props = {
