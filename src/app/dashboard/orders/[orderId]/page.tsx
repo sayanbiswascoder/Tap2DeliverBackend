@@ -13,9 +13,11 @@ type Order = {
   [key: string]: any;
 };
 
-type Props = {
+// Remove explicit Props type and use the Next.js convention for PageProps
+interface PageProps {
   params: { orderId: string };
-};
+  searchParams?: { [key: string]: string | string[] | undefined };
+}
 
 const db = getFirestore(app);
 
@@ -26,7 +28,7 @@ async function getOrder(orderId: string): Promise<Order | null> {
   return { id: snap.id, ...snap.data() };
 }
 
-const Page = ({ params }: Props) => {
+const Page = ({ params }: PageProps) => {
   const [order, setOrder] = useState<Order | null>(null)
 
   useEffect(()=> {
