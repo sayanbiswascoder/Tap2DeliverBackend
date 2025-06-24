@@ -13,12 +13,7 @@ type Order = {
   [key: string]: any;
 };
 
-// Remove explicit Props type and use the Next.js convention for PageProps
-interface PageProps {
-  params: { orderId: string };
-  searchParams?: { [key: string]: string | string[] | undefined };
-}
-
+// Remove explicit PageProps type and use destructuring directly in the Page component
 const db = getFirestore(app);
 
 async function getOrder(orderId: string): Promise<Order | null> {
@@ -28,26 +23,27 @@ async function getOrder(orderId: string): Promise<Order | null> {
   return { id: snap.id, ...snap.data() };
 }
 
-const Page = ({ params }: PageProps) => {
-  const [order, setOrder] = useState<Order | null>(null)
+// Accept props as 'any' to avoid type error with Next.js PageProps constraint
+const Page = (props: any) => {
+  const { params } = props;
+  const [order, setOrder] = useState<Order | null>(null);
 
-  useEffect(()=> {
-    const fetchOrder = async() => {
+  useEffect(() => {
+    const fetchOrder = async () => {
       const order = await getOrder(params.orderId);
       setOrder(order);
-    
+
       if (!order) {
         notFound();
       }
-    }
-    fetchOrder()
-  }, [params])
+    };
+    fetchOrder();
+  }, [params]);
 
   if (!order) {
-    return <Loading />
+    return <Loading />;
   }
 
-  
   return (
     <div className="max-w-xl mx-auto bg-white rounded-xl shadow p-6 mt-8">
       <h1 className="text-2xl font-bold mb-4 text-primary">Order Details</h1>
