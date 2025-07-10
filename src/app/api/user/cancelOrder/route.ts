@@ -30,13 +30,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Only allow cancel if status is 'pending' or 'accepted'
-    if (order?.status !== 'PLACED' && order?.status !== 'ACCEPTED') {
+    if (order?.status !== 'PENDING' && order?.status !== 'PLACED' && order?.status !== 'ACCEPTED') {
       return NextResponse.json({ error: 'Order cannot be cancelled at this stage' }, { status: 400 });
     }
 
     // If payment mode was ONLINE, initiate PhonePe refund
     let refundResult: (RefundResponse & { merchantRefundId: string }) | null = null;
-    if (order?.paymentMode === 'ONLINE') {
+    if (order?.paymentMode === 'ONLINE' && order.paymentState !== "PENDING") {
       try {
         refundResult = await initiatePhonePeRefund(order as { merchantOrderId: string, total: number });
       } catch (refundError) {
@@ -44,8 +44,6 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Failed to initiate refund. Please try again later.' }, { status: 500 });
       }
     }
-
-    console.log(refundResult)
 
     // Update the order status to 'cancelled'
     await orderRef.update({

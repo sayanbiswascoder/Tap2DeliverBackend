@@ -42,11 +42,5 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }): React
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  // With the default value, 'context' will never be null here,
-  // so the null check is technically not strictly necessary anymore for type safety
-  // if you trust that the provider will always wrap consumers.
-  // However, keeping it can still be a good defensive practice if the provider isn't guaranteed.
-  // For most React/Next.js apps, this check becomes less about type safety
-  // and more about providing a helpful runtime error if someone misuses the hook.
   return context;
 };

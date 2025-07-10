@@ -8,13 +8,15 @@ import { IoRestaurant } from "react-icons/io5";
 import { MdDirectionsBike } from "react-icons/md";
 import { MdEditNote } from "react-icons/md";
 import { RiSettings2Fill } from "react-icons/ri";
+import { HiMiniRectangleStack } from "react-icons/hi2";
 
 // Simple icons (replace with your preferred icon library if desired)
 const icons = {
   dashboard: <SiGoogleanalytics />,
   restaurant: <IoRestaurant />,
   riders: <MdDirectionsBike />,
-  orders: <MdEditNote />,
+  orders: <MdEditNote size={24} />,
+  banners: <HiMiniRectangleStack />,
   settings: <RiSettings2Fill />,
 };
 
@@ -38,6 +40,11 @@ const sidebarRoutes = [
     name: "Orders",
     path: "/dashboard/orders",
     icon: icons.orders,
+  },
+  {
+    name: "Banners",
+    path: "/dashboard/banners",
+    icon: icons.banners
   },
   {
     name: "Settings",
@@ -122,9 +129,9 @@ const DashboardTemplate = ({ children }: { children: React.ReactNode }) => {
 
   // Compute section style based on screen size
   const sectionStyle: React.CSSProperties = isMobileScreen
-    ? { marginLeft: 64, marginTop: 40, width: '95%' }
+    ? { marginLeft: 64, marginTop: 40, width: 'calc(100vw - 64px)' }
     : {
-        width: sideBarOpen ? "80%" : "95%",
+        width: sideBarOpen ? 'calc(100vw - 220px)' : 'calc(100vw - 64px)',
         marginLeft: sideBarOpen ? "220px" : "64px",
         marginTop: 40,
       };
@@ -175,7 +182,7 @@ const DashboardTemplate = ({ children }: { children: React.ReactNode }) => {
                 <Link
                   key={route.path}
                   href={route.path}
-                  className={`flex items-center gap-2 px-4 py-3 rounded-lg mx-2 transition-all font-medium
+                  className={`flex items-center duration-300 gap-2 px-4 py-3 rounded-lg mx-2 transition-all font-medium h-12
                     ${
                       isActive
                         ? "bg-white text-amber-600 shadow font-bold"
@@ -189,14 +196,14 @@ const DashboardTemplate = ({ children }: { children: React.ReactNode }) => {
                   }}
                 >
                   {route.icon}
-                  {sideBarOpen && <span>{route.name}</span>}
+                  {sideBarOpen && <span className="delay-200">{route.name}</span>}
                 </Link>
               );
             })}
           </nav>
         </aside>
         <section
-          className="flex-1 bg-gray-50 p-6 rounded-tl-xl overflow-y-auto overflow-x-scroll sm:min-w-[95%]"
+          className="flex-1 bg-gray-50 p-6 rounded-tl-xl overflow-y-auto overflow-x-scroll"
           style={sectionStyle}
         >
           {children}

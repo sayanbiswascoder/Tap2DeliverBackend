@@ -79,18 +79,25 @@ export async function POST(request: NextRequest) {
 
         // Update restaurant's earnings
         const restaurantPaymentRef = db.collection('earnings').doc(orderData?.restaurantId);
-        const restaurantPaymentDoc = await restaurantPaymentRef.get();
-        const restaurantPaymentData = restaurantPaymentDoc.data();
         
         // Calculate restaurant earnings (total order amount minus delivery fee)
         const restaurantEarnings = orderData?.itemTotal || 0;
-        const currentRestaurantEarnings = restaurantPaymentData?.earnings || 0;
-        const newRestaurantEarnings = currentRestaurantEarnings + restaurantEarnings;
+
+        if((await restaurantPaymentRef.get()).exists) {
+            await restaurantPaymentRef.update({
+                earnings: admin.firestore.FieldValue.increment(restaurantEarnings),
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+        } else {
+            await restaurantPaymentRef.set({
+                earnings: restaurantEarnings,
+                lastPayout: null,
+                payout: 0,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            })
+        }
+
         
-        await restaurantPaymentRef.update({
-            earnings: newRestaurantEarnings,
-            updatedAt: new Date()
-        });
 
         // Remove order from rider's assigned orders and update earnings
         const riderRef = db.collection('riders').doc(riderId);
@@ -104,15 +111,21 @@ export async function POST(request: NextRequest) {
         // Update rider's payment document with new earnings
         const riderPaymentRef = db.collection('earnings').doc(riderId);
         const riderPaymentDoc = await riderPaymentRef.get();
-        const riderPaymentData = riderPaymentDoc.data();
-        const currentRiderPaymentEarnings = riderPaymentData?.earnings || 0;
         const deliveryFee = orderData?.delivery;
-        const newRiderPaymentEarnings = currentRiderPaymentEarnings + deliveryFee;
 
-        await riderPaymentRef.update({
-            earnings: newRiderPaymentEarnings,
-            updatedAt: new Date()
-        });
+        if(riderPaymentDoc.exists) {
+            await riderPaymentRef.update({
+                earnings: admin.firestore.FieldValue.increment(deliveryFee),
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+        } else {
+            await riderPaymentRef.set({
+                earnings: deliveryFee,
+                lastPayout: null,
+                payout: 0,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            })
+        }
 
         return NextResponse.json({ status: 'SUCCESS' });
 

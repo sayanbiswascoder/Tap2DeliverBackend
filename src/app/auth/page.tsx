@@ -1,23 +1,22 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable react-hooks/exhaustive-deps */
 "use client";
-import React, { useEffect, useState } from "react";
-import { auth } from "../lib/firebase";
+import React, { useState } from "react";
+import { auth, db } from "../lib/firebase";
 
 import {
   signInWithPopup,
   GoogleAuthProvider,
   signInWithEmailAndPassword,
+  signOut
 } from "firebase/auth";
+import { getDoc, doc } from "firebase/firestore";
 import { useRouter } from "next/navigation";
-import { useAuth } from "../context/AuthContext";
 import { FcGoogle } from "react-icons/fc";
 
 const provider = new GoogleAuthProvider();
 
 const AuthPage = () => {
   const router = useRouter()
-  const { user } = useAuth()
   const [error, setError] = useState<string | null>(null);
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
@@ -28,7 +27,17 @@ const AuthPage = () => {
     setLoading(true);
     try {
       const result = await signInWithPopup(auth, provider);
-      console.log('Signed in with Google, ID Token set:', result.user);
+
+      // checking if the user is not a restaurant or rider
+      const restaurantSnap = await getDoc(doc(db, "restaurants", result.user.uid));
+      const riderSnap = await getDoc(doc(db, "riders", result.user.uid));
+
+      if(restaurantSnap.exists() || riderSnap.exists()) {
+        alert("You can't login in this app with a user or rider ID");
+        signOut(auth)
+        return;
+      }
+      
       router.replace("/")
     } catch (err: any) {
       setError(err?.message || "Google sign-in failed");
@@ -43,7 +52,17 @@ const AuthPage = () => {
     setLoading(true);
     try {
       const result = await signInWithEmailAndPassword(auth, email, password);
-      console.log(result)
+      
+      // checking if the user is not a restaurant or rider
+      const restaurantSnap = await getDoc(doc(db, "restaurants", result.user.uid));
+      const riderSnap = await getDoc(doc(db, "riders", result.user.uid));
+
+      if(restaurantSnap.exists() || riderSnap.exists()) {
+        alert("You can't login in this app with a user or rider ID");
+        signOut(auth)
+        return;
+      }
+
       router.replace("/")
     } catch (err: any) {
       setError(err?.message || "Email/password sign-in failed");
@@ -51,10 +70,6 @@ const AuthPage = () => {
       setLoading(false);
     }
   };
-
-  useEffect(()=> {
-    if(user) router.replace("/")
-  }, [user])
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary to-yellow-200">
