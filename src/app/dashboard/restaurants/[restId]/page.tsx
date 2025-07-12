@@ -1,8 +1,9 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 import React, { useEffect, useState } from "react";
-import { getFirestore, doc, getDoc, collection, query, where, getDocs, updateDoc, deleteField } from "firebase/firestore"; // Import deleteField
-import { notFound, useRouter } from "next/navigation"; // Import useRouter
+import { getFirestore, doc, getDoc, collection, query, where, getDocs, updateDoc, deleteField } from "firebase/firestore";
+import { notFound, useRouter } from "next/navigation";
 import Loading from "../../loading";
 
 type Offer = {
@@ -20,6 +21,8 @@ type Restaurant = {
     offer?: Offer; // Restaurant-wide offer
     category?: Record<string, Offer>; // Category-specific offers
   };
+  dummyOffer?: number; // Add dummyOffer to type for local state
+  bestSailor?: string; // Add bestSailor to type for local state
   [key: string]: unknown;
 };
 
@@ -33,10 +36,10 @@ type Dish = {
   [key: string]: unknown;
 };
 
-// Remove explicit Props type and accept props as 'any' to avoid Next.js PageProps constraint error
 const RestaurantPage = (props: any) => {
+  const db = getFirestore();
   const { params } = props;
-  const router = useRouter(); // Initialize useRouter
+  const router = useRouter();
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -49,14 +52,23 @@ const RestaurantPage = (props: any) => {
   // Offer management state
   const [showOfferModal, setShowOfferModal] = useState(false);
   const [currentOfferTarget, setCurrentOfferTarget] = useState<'restaurant' | 'category' | 'dish' | null>(null);
-  const [currentOfferTargetId, setCurrentOfferTargetId] = useState<string | null>(null); // restId, categoryName, or dishId
+  const [currentOfferTargetId, setCurrentOfferTargetId] = useState<string | null>(null);
   const [offerValue, setOfferValue] = useState<string>('');
   const [offerType, setOfferType] = useState<'percentage' | 'flat'>('percentage');
   const [isUpdatingOffer, setIsUpdatingOffer] = useState(false);
   const [offerError, setOfferError] = useState<string | null>(null);
 
+  // Dummy offer modal state
+  const [showDummyOfferModal, setShowDummyOfferModal] = useState(false);
+  const [dummyOfferValue, setDummyOfferValue] = useState<string>('');
+  const [dummyOfferError, setDummyOfferError] = useState<string | null>(null);
+  const [isUpdatingDummyOffer, setIsUpdatingDummyOffer] = useState(false);
+
+  // Best Sailor state
+  const [isSettingBestSailor, setIsSettingBestSailor] = useState<string | null>(null);
+  const [bestSailorError, setBestSailorError] = useState<string | null>(null);
+
   async function getRestaurant(restId: string): Promise<Restaurant | null> {
-    const db = getFirestore();
     const docRef = doc(db, "restaurants", restId);
     const snap = await getDoc(docRef);
     if (!snap.exists()) return null;
@@ -64,7 +76,6 @@ const RestaurantPage = (props: any) => {
   }
 
   async function getDishesForRestaurant(restId: string): Promise<Dish[]> {
-    const db = getFirestore();
     const dishesRef = collection(db, "dishes");
     const q = query(dishesRef, where("restaurantId", "==", restId));
     const snap = await getDocs(q);
@@ -86,7 +97,6 @@ const RestaurantPage = (props: any) => {
       }
     };
     fetchRestaurant();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.restId]);
 
   const handleShowDishes = async () => {
@@ -126,11 +136,23 @@ const RestaurantPage = (props: any) => {
       setOfferValue(existingOffer.value.toString());
       setOfferType(existingOffer.type);
     } else {
-      setOfferValue(''); // Reset form
-      setOfferType('percentage'); // Reset form
+      setOfferValue('');
+      setOfferType('percentage');
     }
 
     setShowOfferModal(true);
+  };
+
+  // Dummy Offer Modal open handler
+  const handleOpenDummyOfferModal = () => {
+    // Only allow for restaurant
+    setDummyOfferError(null);
+    setDummyOfferValue(
+      restaurant && typeof restaurant.dummyOffer === "number"
+        ? restaurant.dummyOffer.toString()
+        : ""
+    );
+    setShowDummyOfferModal(true);
   };
 
   const handleCloseOfferModal = () => {
@@ -140,6 +162,12 @@ const RestaurantPage = (props: any) => {
     setOfferValue('');
     setOfferType('percentage');
     setOfferError(null);
+  };
+
+  const handleCloseDummyOfferModal = () => {
+    setShowDummyOfferModal(false);
+    setDummyOfferValue('');
+    setDummyOfferError(null);
   };
 
   const handleSetOffer = async () => {
@@ -156,7 +184,6 @@ const RestaurantPage = (props: any) => {
 
     setIsUpdatingOffer(true);
     setOfferError(null);
-    const db = getFirestore();
 
     try {
       if (currentOfferTarget === 'restaurant') {
@@ -164,14 +191,12 @@ const RestaurantPage = (props: any) => {
         await updateDoc(restDocRef, {
           'offer.offer': { type: offerType, value: value }
         });
-        // Update local state
         setRestaurant(prev => prev ? { ...prev, offer: { ...prev.offer, offer: { type: offerType, value: value } } } : null);
       } else if (currentOfferTarget === 'category') {
-        const restDocRef = doc(db, "restaurants", params.restId); // Category offer is on restaurant doc
+        const restDocRef = doc(db, "restaurants", params.restId);
         await updateDoc(restDocRef, {
           [`offer.category.${currentOfferTargetId}`]: { type: offerType, value: value }
         });
-        // Update local state
         setRestaurant(prev => {
           if (!prev) return null;
           const newOffer = { ...prev.offer, category: { ...(prev.offer?.category || {}), [currentOfferTargetId]: { type: offerType, value: value } } };
@@ -182,7 +207,6 @@ const RestaurantPage = (props: any) => {
         await updateDoc(dishDocRef, {
           'offer': { type: offerType, value: value }
         });
-        // Update local state
         setDishes(prev => prev ? prev.map(dish => dish.id === currentOfferTargetId ? { ...dish, offer: { type: offerType, value: value } } : dish) : null);
       }
       handleCloseOfferModal();
@@ -194,6 +218,57 @@ const RestaurantPage = (props: any) => {
     }
   };
 
+  // Dummy Offer set handler
+  const handleSetDummyOffer = async () => {
+    if (!dummyOfferValue) {
+      setDummyOfferError("Please enter a value for the dummy offer.");
+      return;
+    }
+    const value = parseFloat(dummyOfferValue);
+    if (isNaN(value) || value <= 0) {
+      setDummyOfferError("Please enter a valid positive number for the dummy offer value.");
+      return;
+    }
+    setIsUpdatingDummyOffer(true);
+    setDummyOfferError(null);
+    try {
+      const restDocRef = doc(db, "restaurants", params.restId);
+      await updateDoc(restDocRef, {
+        dummyOffer: value
+      });
+      setRestaurant(prev => prev ? { ...prev, dummyOffer: value } : null);
+      handleCloseDummyOfferModal();
+    } catch (error) {
+      console.error("Error setting dummy offer:", error);
+      setDummyOfferError("Failed to set dummy offer. Please try again.");
+    } finally {
+      setIsUpdatingDummyOffer(false);
+    }
+  };
+
+  // Dummy Offer remove handler
+  const handleRemoveDummyOffer = async () => {
+    setIsUpdatingDummyOffer(true);
+    setDummyOfferError(null);
+    try {
+      const restDocRef = doc(db, "restaurants", params.restId);
+      await updateDoc(restDocRef, {
+        dummyOffer: deleteField()
+      });
+      setRestaurant(prev => {
+        if (!prev) return null;
+        const { ...rest } = prev;
+        return { ...rest };
+      });
+      handleCloseDummyOfferModal();
+    } catch (error) {
+      console.error("Error removing dummy offer:", error);
+      setDummyOfferError("Failed to remove dummy offer. Please try again.");
+    } finally {
+      setIsUpdatingDummyOffer(false);
+    }
+  };
+
   const handleRemoveOffer = async () => {
     if (!currentOfferTarget || !currentOfferTargetId) {
       setOfferError("No target selected for offer removal.");
@@ -202,7 +277,6 @@ const RestaurantPage = (props: any) => {
 
     setIsUpdatingOffer(true);
     setOfferError(null);
-    const db = getFirestore();
 
     try {
       if (currentOfferTarget === 'restaurant') {
@@ -210,14 +284,12 @@ const RestaurantPage = (props: any) => {
         await updateDoc(restDocRef, {
           'offer.offer': deleteField()
         });
-        // Update local state
         setRestaurant(prev => prev ? { ...prev, offer: { ...prev.offer, offer: undefined } } : null);
       } else if (currentOfferTarget === 'category') {
         const restDocRef = doc(db, "restaurants", params.restId);
         await updateDoc(restDocRef, {
           [`offer.category.${currentOfferTargetId}`]: deleteField()
         });
-        // Update local state
         setRestaurant(prev => {
           if (!prev) return null;
           const newCategoryOffers = { ...(prev.offer?.category || {}) };
@@ -229,7 +301,6 @@ const RestaurantPage = (props: any) => {
         await updateDoc(dishDocRef, {
           'offer': deleteField()
         });
-        // Update local state
         setDishes(prev => prev ? prev.map(dish => dish.id === currentOfferTargetId ? { ...dish, offer: undefined } : dish) : null);
       }
       handleCloseOfferModal();
@@ -246,25 +317,40 @@ const RestaurantPage = (props: any) => {
     router.push(`/dashboard/banners?restaurantId=${params.restId}`);
   };
 
+  // Handler for setting bestSailor
+  const handleSetBestSailor = async (dishId: string) => {
+    setIsSettingBestSailor(dishId);
+    setBestSailorError(null);
+    try {
+      const restDocRef = doc(db, "restaurants", params.restId);
+      await updateDoc(restDocRef, {
+        bestSailor: dishId
+      });
+      setRestaurant(prev => prev ? { ...prev, bestSailor: dishId } : null);
+    } catch (error) {
+      console.error("Error setting bestSailor:", error);
+      setBestSailorError("Failed to set as bestSailor. Please try again.");
+    } finally {
+      setIsSettingBestSailor(null);
+    }
+  };
+
   if (loading) {
     return <Loading />;
   }
 
   if (!restaurant) {
-    // Should not reach here, but fallback
     return <div className="text-center text-red-600 mt-8">Restaurant not found.</div>;
   }
 
   // Categorize dishes by their category
   const categorizedDishes: Record<string, Dish[]> = {};
   if (dishes && Array.isArray(restaurant.categories)) {
-    // For each category, collect dishes
     restaurant.categories.forEach((cat) => {
       categorizedDishes[cat] = dishes.filter(
         (dish) => dish.category === cat
       );
     });
-    // Also collect dishes with no or unknown category
     const uncategorized = dishes.filter(
       (dish) =>
         !dish.category ||
@@ -289,6 +375,9 @@ const RestaurantPage = (props: any) => {
     }
     return false;
   })();
+
+  // Determine if dummyOffer exists
+  const hasDummyOffer = typeof restaurant.dummyOffer === "number";
 
   return (
     <div className="max-w-xl mx-auto bg-white rounded-xl shadow p-6 mt-8">
@@ -332,7 +421,67 @@ const RestaurantPage = (props: any) => {
         >
           Set Restaurant Offer
         </button>
+        <button
+          className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm transition ml-2"
+          onClick={() => handleOpenDummyOfferModal()}
+        >
+          Set Restaurant Dummy Offer
+        </button>
+        {hasDummyOffer && (
+          <div className="bg-yellow-100 text-yellow-800 p-2 rounded mb-2 text-sm mt-2">
+            Dummy Offer: {restaurant.dummyOffer}%
+          </div>
+        )}
       </div>
+
+      {/* Dummy Offer Modal */}
+      {showDummyOfferModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-xl w-96">
+            <h2 className="text-xl font-bold mb-4">
+              Set Dummy Offer for Restaurant
+            </h2>
+            <div className="mb-4">
+              <label htmlFor="dummyOfferValue" className="block text-sm font-medium text-gray-700">Dummy Offer Value (%):</label>
+              <input
+                type="number"
+                id="dummyOfferValue"
+                value={dummyOfferValue}
+                onChange={(e) => setDummyOfferValue(e.target.value)}
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
+                placeholder="e.g., 10"
+                min="0"
+              />
+            </div>
+            {dummyOfferError && <div className="text-red-600 text-sm mb-4">{dummyOfferError}</div>}
+            <div className="flex justify-end space-x-2">
+              <button
+                className="px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400 transition"
+                onClick={handleCloseDummyOfferModal}
+                disabled={isUpdatingDummyOffer}
+              >
+                Cancel
+              </button>
+              {hasDummyOffer && (
+                <button
+                  className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition"
+                  onClick={handleRemoveDummyOffer}
+                  disabled={isUpdatingDummyOffer}
+                >
+                  {isUpdatingDummyOffer ? 'Removing...' : 'Remove Dummy Offer'}
+                </button>
+              )}
+              <button
+                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition"
+                onClick={handleSetDummyOffer}
+                disabled={isUpdatingDummyOffer}
+              >
+                {isUpdatingDummyOffer ? 'Setting...' : 'Set Dummy Offer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* New button for adding banner */}
       <div className="mt-4 border-t pt-4">
@@ -417,7 +566,7 @@ const RestaurantPage = (props: any) => {
                               <tr key={dish.id} className="hover:bg-amber-50" title={`Dish ID: ${dish.id}`}>
                                 <td className="py-2 px-4 border-b">{dish.name || "N/A"}</td>
                                 <td className="py-2 px-4 border-b">
-                                  {dish.price !== undefined ? `$${dish.price}` : "N/A"}
+                                  {dish.price !== undefined ? `₹${dish.price}` : "N/A"}
                                 </td>
                                 <td className="py-2 px-4 border-b">{dish.description || "N/A"}</td>
                                 <td className="py-2 px-4 border-b">
@@ -425,13 +574,31 @@ const RestaurantPage = (props: any) => {
                                     <span className="text-green-700">{dish.offer.value}{dish.offer.type === 'percentage' ? '%' : ' flat'} off</span>
                                   ) : "N/A"}
                                 </td>
-                                <td className="py-2 px-4 border-b">
+                                <td className="py-2 px-4 border-b flex flex-col gap-1">
                                   <button
                                     className="px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-xs transition"
                                     onClick={() => handleOpenOfferModal('dish', dish.id)}
                                   >
                                     Set Offer
                                   </button>
+                                  <button
+                                    className={`px-2 py-1 rounded text-xs transition ${restaurant.bestSailor === dish.id ? "bg-green-600 text-white" : "bg-amber-500 text-white hover:bg-amber-600"}`}
+                                    onClick={() => handleSetBestSailor(dish.id)}
+                                    disabled={isSettingBestSailor === dish.id}
+                                    title="Set as Best Sailor"
+                                  >
+                                    {isSettingBestSailor === dish.id
+                                      ? "Setting..."
+                                      : restaurant.bestSailor === dish.id
+                                        ? "Best Sailor"
+                                        : "Set as Best Sailor"}
+                                  </button>
+                                  {restaurant.bestSailor === dish.id && (
+                                    <span className="text-green-700 text-xs font-semibold">Best Sailor</span>
+                                  )}
+                                  {bestSailorError && isSettingBestSailor === dish.id && (
+                                    <span className="text-red-600 text-xs">{bestSailorError}</span>
+                                  )}
                                 </td>
                               </tr>
                             ))}

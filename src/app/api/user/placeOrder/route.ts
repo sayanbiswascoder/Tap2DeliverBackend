@@ -10,6 +10,36 @@ interface Offer {
     value: number;
 }
 
+// New interfaces for opening hours
+interface DayOpeningHours {
+    openTime: string; // HH:MM
+    closeTime: string; // HH:MM
+    isOpen: boolean;
+}
+
+interface OpeningHours {
+    monday: DayOpeningHours;
+    tuesday: DayOpeningHours;
+    wednesday: DayOpeningHours;
+    thursday: DayOpeningHours;
+    friday: DayOpeningHours;
+    saturday: DayOpeningHours;
+    sunday: DayOpeningHours;
+}
+
+// Updated RestaurantData interface to include openingHours and fcmToken
+interface RestaurantData {
+    offer?: { offer?: Offer; category?: Record<string, Offer> };
+    address?: {
+        location?: {
+            latitude: number;
+            longitude: number;
+        };
+    };
+    openingHours?: OpeningHours; // Added this
+    fcmToken?: string; // Added this for consistency with later usage
+}
+
 // Helper function to apply an offer to a base price
 function applyOffer(basePrice: number, offer?: Offer): number {
     if (!offer) return basePrice;
@@ -21,6 +51,44 @@ function applyOffer(basePrice: number, offer?: Offer): number {
         return Math.max(0, basePrice - offer.value); 
     }
     return basePrice;
+}
+
+// Helper function to check if restaurant is open based on opening hours
+function isRestaurantOpen(openingHours: OpeningHours): boolean {
+    const now = new Date();
+    const dayOfWeek = now.toLocaleString('en-US', { weekday: 'long' }).toLowerCase(); // e.g., "monday"
+
+    const todayHours = openingHours[dayOfWeek as keyof OpeningHours];
+
+    // If no data for today or explicitly marked as closed
+    if (!todayHours || !todayHours.isOpen) {
+        return false;
+    }
+
+    const [currentHour, currentMinute] = [now.getHours(), now.getMinutes()];
+    const currentTimeInMinutes = currentHour * 60 + currentMinute;
+
+    const [openHour, openMinute] = todayHours.openTime.split(':').map(Number);
+    const openTimeInMinutes = openHour * 60 + openMinute;
+
+    const [closeHour, closeMinute] = todayHours.closeTime.split(':').map(Number);
+    const closeTimeInMinutes = closeHour * 60 + closeMinute;
+
+    // Handle closing time crossing midnight (e.g., 22:00 - 02:00)
+    if (closeTimeInMinutes < openTimeInMinutes) {
+        // If current time is before midnight (on the opening day) AND after open time
+        // OR current time is after midnight (on the next day) AND before close time
+        if (currentTimeInMinutes >= openTimeInMinutes || currentTimeInMinutes <= closeTimeInMinutes) {
+            return true;
+        }
+    } else {
+        // Standard case: open and close times are on the same day
+        if (currentTimeInMinutes >= openTimeInMinutes && currentTimeInMinutes <= closeTimeInMinutes) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 // Constants for order calculations (these could be fetched from a global configuration
@@ -115,17 +183,22 @@ export async function POST(request: NextRequest) {
                 { status: 404 }
             );
         }
-        const restaurantData = restaurantDoc.data() as { 
-            offer?: { offer?: Offer; category?: Record<string, Offer> };
-            address?: {
-                location?: {
-                    latitude: number;
-                    longitude: number;
-                };
-            };
-        };
+        const restaurantData = restaurantDoc.data() as RestaurantData; // Use the new RestaurantData interface
 
-        console.log(restaurantData)
+        // Check if restaurant is open before processing the order group
+        if (!restaurantData.openingHours) {
+            return NextResponse.json(
+                { error: `Restaurant with ID ${orderGroup.restaurantId} has no opening hours configured.` },
+                { status: 400 }
+            );
+        }
+
+        if (!isRestaurantOpen(restaurantData.openingHours)) {
+            return NextResponse.json(
+                { error: `Restaurant with ID ${orderGroup.restaurantId} is currently closed.` },
+                { status: 400 }
+            );
+        }
 
         // Validate restaurant coordinates for delivery calculation
         if (typeof restaurantData.address?.location?.latitude !== 'number' || typeof restaurantData.address.location.longitude !== 'number') {
@@ -211,14 +284,18 @@ export async function POST(request: NextRequest) {
             groupItemTotal += effectivePricePerUnit * item.qty;
             
             // Store detailed item information for the order record, including applied offers
-            processedItems.push({
+            // Remove 'appliedOffer' field if there is no offer, to avoid Firestore undefined error
+            const processedItem: ProcessedOrderItem = {
                 id: item.id,
                 qty: item.qty,
                 name: dishData.name, // Store dish name for historical accuracy
                 basePrice: dishData.price,
                 finalPricePerUnit: effectivePricePerUnit,
-                appliedOffer: appliedOffer ? { ...appliedOffer, source: offerSource } as Offer & { source: string } : undefined, // Include applied offer details and its source
-            });
+            };
+            if (appliedOffer) {
+                processedItem.appliedOffer = { ...appliedOffer, source: offerSource } as Offer & { source: string };
+            }
+            processedItems.push(processedItem);
         }
 
         // Calculate delivery charge based on distance between user and restaurant
@@ -257,11 +334,22 @@ export async function POST(request: NextRequest) {
         // Second pass: Create orders in Firestore using the validated and calculated data
         for (let i = 0; i < processedOrderGroups.length; i++) {
             const processedGroup = processedOrderGroups[i];
-            
+
+            // Remove any undefined 'appliedOffer' fields from items before saving to Firestore
+            const cleanedItems = processedGroup.items.map(item => {
+                // If appliedOffer is undefined, do not include the field
+                const { appliedOffer, ...rest } = item;
+                if (appliedOffer === undefined) {
+                    return rest;
+                } else {
+                    return { ...rest, appliedOffer };
+                }
+            });
+
             const orderData = {
                 userId: userId,
                 restaurantId: processedGroup.restaurantId,
-                items: processedGroup.items, // These now include calculated prices and offer details
+                items: cleanedItems, // These now include calculated prices and offer details, with no undefined fields
                 itemTotal: processedGroup.itemTotal,
                 status: "PLACED", // Initial status of the order
                 paymentMode: "COD", // Assuming Cash on Delivery for now; could be dynamic
@@ -282,7 +370,7 @@ export async function POST(request: NextRequest) {
             const fcmTokens: string[] = [];
             for (const restaurantId of restaurantIds) {
                 const restaurantDoc = await db.collection('restaurants').doc(restaurantId).get();
-                const restaurantData = restaurantDoc.data(); 
+                const restaurantData = restaurantDoc.data() as RestaurantData; // Use the new RestaurantData interface
                 if (restaurantData?.fcmToken) {
                     fcmTokens.push(restaurantData.fcmToken);
                 }

@@ -12,6 +12,23 @@ interface Offer {
     value: number;
 }
 
+// Define OpeningHours type based on file_context_0
+interface DayOpeningHours {
+    openTime: string;
+    closeTime: string;
+    isOpen: boolean;
+}
+
+interface OpeningHours {
+    monday: DayOpeningHours;
+    tuesday: DayOpeningHours;
+    wednesday: DayOpeningHours;
+    thursday: DayOpeningHours;
+    friday: DayOpeningHours;
+    saturday: DayOpeningHours;
+    sunday: DayOpeningHours;
+}
+
 // Helper function to apply an offer to a base price
 function applyOffer(basePrice: number, offer?: Offer): number {
     if (!offer) return basePrice;
@@ -54,6 +71,7 @@ interface ProcessedOrderItem {
     name: string;
     basePrice: number;
     finalPricePerUnit: number;
+    // Remove optional from appliedOffer, but we will only include it if it exists (see below)
     appliedOffer?: Offer & { source: string };
 }
 
@@ -118,12 +136,83 @@ export async function POST(request: NextRequest) {
                         longitude: number;
                     };
                 };
+                openingHours?: OpeningHours; // Added openingHours to restaurantData
             };
 
             // Validate restaurant coordinates for delivery calculation
             if (typeof restaurantData.address?.location?.latitude !== 'number' || typeof restaurantData.address?.location?.longitude !== 'number') {
                 return NextResponse.json(
                     { error: `Restaurant with ID ${orderGroup.restaurantId} has invalid or missing location data.` },
+                    { status: 400 }
+                );
+            }
+
+            // Check if restaurant is open
+            const now = new Date();
+            const dayOfWeek = now.toLocaleString('en-us', { weekday: 'long' }).toLowerCase() as keyof OpeningHours;
+            const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+            const restaurantOpeningHours = restaurantData.openingHours?.[dayOfWeek];
+
+            // Validate that opening hours for the current day are available and the restaurant is marked as open
+            if (!restaurantOpeningHours || !restaurantOpeningHours.isOpen) {
+                return NextResponse.json(
+                    { error: `Restaurant ${orderGroup.restaurantId} is currently closed.` },
+                    { status: 400 }
+                );
+            }
+
+            // Validate openTime and closeTime existence and format
+            if (!restaurantOpeningHours.openTime || !restaurantOpeningHours.closeTime) {
+                return NextResponse.json(
+                    { error: `Restaurant ${orderGroup.restaurantId} has incomplete opening hours configuration for today.` },
+                    { status: 400 }
+                );
+            }
+
+            const openTimeParts = restaurantOpeningHours.openTime.split(':').map(Number);
+            const closeTimeParts = restaurantOpeningHours.closeTime.split(':').map(Number);
+
+            // Validate that time parts are valid numbers and there are exactly two parts (hour and minute)
+            if (openTimeParts.length !== 2 || closeTimeParts.length !== 2 ||
+                isNaN(openTimeParts[0]) || isNaN(openTimeParts[1]) ||
+                isNaN(closeTimeParts[0]) || isNaN(closeTimeParts[1])) {
+                return NextResponse.json(
+                    { error: `Restaurant ${orderGroup.restaurantId} has malformed opening hours configuration (e.g., time format not HH:MM).` },
+                    { status: 400 }
+                );
+            }
+
+            const [openHour, openMinute] = openTimeParts;
+            const openMinutes = openHour * 60 + openMinute;
+
+            const [closeHour, closeMinute] = closeTimeParts;
+            const closeMinutes = closeHour * 60 + closeMinute;
+
+            // Further validate time ranges (e.g., hours 0-23, minutes 0-59)
+            if (openHour < 0 || openHour > 23 || openMinute < 0 || openMinute > 59 ||
+                closeHour < 0 || closeHour > 23 || closeMinute < 0 || closeMinute > 59) {
+                return NextResponse.json(
+                    { error: `Restaurant ${orderGroup.restaurantId} has invalid time values in its opening hours configuration.` },
+                    { status: 400 }
+                );
+            }
+
+            // Handle cases where closing time is past midnight (e.g., 22:00 - 02:00)
+            let isOpenNow = false;
+            if (closeMinutes < openMinutes) { // Closing time is on the next day
+                if (currentMinutes >= openMinutes || currentMinutes <= closeMinutes) {
+                    isOpenNow = true;
+                }
+            } else { // Closing time is on the same day
+                if (currentMinutes >= openMinutes && currentMinutes <= closeMinutes) {
+                    isOpenNow = true;
+                }
+            }
+
+            if (!isOpenNow) {
+                return NextResponse.json(
+                    { error: `Restaurant ${orderGroup.restaurantId} is currently closed. It is open from ${restaurantOpeningHours.openTime} to ${restaurantOpeningHours.closeTime} today.` },
                     { status: 400 }
                 );
             }
@@ -204,14 +293,19 @@ export async function POST(request: NextRequest) {
                 groupItemTotal += effectivePricePerUnit * item.qty;
 
                 // Store detailed item information for the order record, including applied offers
-                processedItems.push({
+                // Only include appliedOffer if it is defined, otherwise omit the field entirely
+                const processedItem: ProcessedOrderItem = {
                     id: item.id,
                     qty: item.qty,
                     name: dishData.name, // Store dish name for historical accuracy
                     basePrice: dishData.price,
                     finalPricePerUnit: effectivePricePerUnit,
-                    appliedOffer: appliedOffer ? { ...appliedOffer, source: offerSource } as Offer & { source: string } : undefined, // Include applied offer details and its source
-                });
+                };
+                if (appliedOffer && offerSource) {
+                    processedItem.appliedOffer = { ...appliedOffer, source: offerSource } as Offer & { source: string };
+                }
+                // If no offer, do not set appliedOffer at all (it will be omitted from Firestore doc)
+                processedItems.push(processedItem);
             }
 
             // Calculate delivery charge based on distance between user and restaurant

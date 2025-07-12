@@ -115,7 +115,6 @@ const DashboardTemplate = ({ children }: { children: React.ReactNode }) => {
       }
       setIsMobileScreen(window.innerWidth < 768);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
 
   const toggleSideBar = useCallback(() => {
