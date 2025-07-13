@@ -1,13 +1,19 @@
 "use client"
 import { getAuth, signOut } from "firebase/auth";
 import { useRouter } from "next/navigation";
+import { useAuth } from "./context/AuthContext";
 
 export default function Home() {
   const auth = getAuth()
+  const { user } = useAuth()
   const router = useRouter()
 
   const handleLogOut = () => {
     signOut(auth)
+    router.replace("/auth")
+  }
+
+  if(!user) {
     router.replace("/auth")
   }
   

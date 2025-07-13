@@ -46,6 +46,7 @@ export async function POST(request: NextRequest) {
         // Update order status to DELIVERED
         await orderRef.update({
             status: 'DELIVERED',
+            paymentState: "COMPLETED",
             deliveredAt: new Date(),
             updatedAt: new Date()
         });

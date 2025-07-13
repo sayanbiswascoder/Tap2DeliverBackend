@@ -82,8 +82,6 @@ export async function POST(request: NextRequest) {
         const userPINCode = userData?.addresses[0]?.pinCode;
         const restaurantPINCode = restaurantData?.address?.pinCode;
 
-        console.log(userPINCode, restaurantPINCode)
-
         if (userPINCode && restaurantPINCode) {
             // Get available riders for the route
             const availableRiders = await getRiderByPINCode(restaurantPINCode, userPINCode);

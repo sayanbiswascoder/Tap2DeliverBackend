@@ -53,6 +53,7 @@ const Page = () => {
         // Query orders where createdAt >= start && createdAt < end
         const q = query(
           collection(db, "orders"),
+          where("status", "==", "DELIVERED"),
           where("createdAt", ">=", Timestamp.fromDate(start)),
           where("createdAt", "<", Timestamp.fromDate(end))
         );
