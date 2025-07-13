@@ -478,7 +478,7 @@ const BannersPage = () => {
                 </div>
                 {imagePreview && !showCropModal && (
                   <div className="mt-2">
-                    <ImageComponent src={imagePreview} alt="Preview" className="w-full h-32 object-cover rounded" />
+                    <ImageComponent src={imagePreview} alt="Preview" className="w-full h-32 object-cover rounded" width={400} height={192} />
                   </div>
                 )}
               </div>
