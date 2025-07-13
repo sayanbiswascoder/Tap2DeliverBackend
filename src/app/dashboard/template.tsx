@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { SiGoogleanalytics } from "react-icons/si";
 import { IoRestaurant } from "react-icons/io5";
-import { MdDirectionsBike } from "react-icons/md";
+import { MdDirectionsBike, MdFeedback } from "react-icons/md";
 import { MdEditNote } from "react-icons/md";
 import { RiSettings2Fill } from "react-icons/ri";
 import { HiMiniRectangleStack } from "react-icons/hi2";
@@ -17,6 +17,7 @@ const icons = {
   riders: <MdDirectionsBike />,
   orders: <MdEditNote size={24} />,
   banners: <HiMiniRectangleStack />,
+  feedback: <MdFeedback  />,
   settings: <RiSettings2Fill />,
 };
 
@@ -45,6 +46,11 @@ const sidebarRoutes = [
     name: "Banners",
     path: "/dashboard/banners",
     icon: icons.banners
+  },
+  {
+    name: "Feedback",
+    path: "/dashboard/feedbacks",
+    icon: icons.feedback
   },
   {
     name: "Settings",

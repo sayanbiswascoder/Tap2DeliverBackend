@@ -73,7 +73,6 @@ export async function POST(request: NextRequest) {
         // Update rider's available orders and set as unavailable
         await riderRef.update({
             availableOrders: admin.firestore.FieldValue.arrayRemove(orderId),
-            isAvailable: false,
             currentOrderId: admin.firestore.FieldValue.arrayUnion(orderId)
         });
 

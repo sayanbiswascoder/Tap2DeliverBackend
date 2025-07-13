@@ -348,6 +348,7 @@ export async function POST(request: NextRequest) {
             const ppRes = await axios.post("https://api-preprod.phonepe.com/apis/pg-sandbox/checkout/v2/sdk/order", JSON.stringify({
                 'merchantOrderId': merchantOrderId,
                 'amount': (total * 100).toString(),
+                'callbackUrl': 'https://webhook.site/955ab2cd-124b-468b-893f-5c1cd024ced5',
                 'paymentFlow': {
                     'type': 'PG_CHECKOUT'
                 }

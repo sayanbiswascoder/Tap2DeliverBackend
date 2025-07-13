@@ -7,7 +7,7 @@ import Loading from "../loading";
 interface Rider {
   id: string;
   name: string;
-  phone?: string;
+  phoneNumber?: string;
   vehicle?: string;
   [key: string]: unknown;
 }
@@ -102,7 +102,7 @@ const RidersPage = () => {
                 filteredRiders.map((rider) => (
                   <tr key={rider.id} className="hover:bg-amber-50">
                     <td className="py-2 px-4 border-b">{rider.name || "N/A"}</td>
-                    <td className="py-2 px-4 border-b">{rider.phone || "N/A"}</td>
+                    <td className="py-2 px-4 border-b">{rider.phoneNumber || "N/A"}</td>
                     <td className="py-2 px-4 border-b">{rider.vehicle || "N/A"}</td>
                     <td className="py-2 px-4 border-b">
                       <Link
